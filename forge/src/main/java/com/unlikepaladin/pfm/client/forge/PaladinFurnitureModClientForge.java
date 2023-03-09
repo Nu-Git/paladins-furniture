@@ -10,8 +10,10 @@ import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.minecraftforge.fmlclient.ConfigGuiHandler;
 import net.minecraftforge.fmlclient.registry.ClientRegistry;
 import net.minecraftforge.fmllegacy.network.NetworkEvent;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -27,15 +29,21 @@ public class PaladinFurnitureModClientForge {
     public static void clientSetup(FMLClientSetupEvent event) {
         NetworkRegistryForge.registerPackets();
         ColorRegistryForge.registerBlockRenderLayers();
+        event.enqueueWork(PaladinFurnitureModClientForge::registerScreens);
+        ModLoadingContext.get().registerExtensionPoint(ConfigGuiHandler.ConfigGuiFactory.class,
+                () -> new ConfigGuiHandler.ConfigGuiFactory(
+                        (client, parent) -> new PFMConfigScreen(client, parent)));
 
+        PaladinFurnitureModClient.USE_TOILET_KEYBIND = registerKey("key.pfm.toiletUse", "keybindings.category.pfm", GLFW.GLFW_KEY_U);
+    }
 
+    private static void registerScreens() {
         HandledScreens.register(ScreenHandlerIDs.FREEZER_SCREEN_HANDLER, FreezerScreen::new);
         HandledScreens.register(ScreenHandlerIDs.WORKBENCH_SCREEN_HANDLER, WorkbenchScreen::new);
         HandledScreens.register(ScreenHandlerIDs.STOVE_SCREEN_HANDLER, StoveScreen::new);
         HandledScreens.register(ScreenHandlerIDs.IRON_STOVE_SCREEN_HANDLER, IronStoveScreen::new);
         HandledScreens.register(ScreenHandlerIDs.MICROWAVE_SCREEN_HANDLER, MicrowaveScreen::new);
         HandledScreens.register(ScreenHandlerIDs.TRASHCAN_SCREEN_HANDLER, TrashcanScreen::new);
-        PaladinFurnitureModClient.USE_TOILET_KEYBIND = registerKey("key.pfm.toiletUse", "keybindings.category.pfm", GLFW.GLFW_KEY_U);
     }
 
     public static KeyBinding registerKey(String name, String category, int keyCode) {

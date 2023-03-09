@@ -1,31 +1,33 @@
 package com.unlikepaladin.pfm.fabric;
 
 import com.unlikepaladin.pfm.PaladinFurnitureMod;
-import com.unlikepaladin.pfm.compat.PaladinFurnitureModConfig;
 import com.unlikepaladin.pfm.compat.fabric.MissingDependencyScreen;
-import com.unlikepaladin.pfm.compat.fabric.PaladinFurnitureModConfigImpl;
 import com.unlikepaladin.pfm.compat.fabric.sandwichable.PFMSandwichableRegistry;
+import com.unlikepaladin.pfm.config.PaladinFurnitureModConfig;
+import com.unlikepaladin.pfm.config.option.AbstractConfigOption;
 import com.unlikepaladin.pfm.registry.*;
 import com.unlikepaladin.pfm.registry.fabric.*;
-import me.shedaniel.autoconfig.AutoConfig;
-import me.shedaniel.autoconfig.ConfigHolder;
-import me.shedaniel.autoconfig.serializer.GsonConfigSerializer;
-import me.shedaniel.autoconfig.serializer.Toml4jConfigSerializer;
+import io.netty.buffer.Unpooled;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.client.itemgroup.FabricItemGroupBuilder;
+import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.event.server.ServerStartCallback;
+import net.fabricmc.fabric.api.networking.v1.PacketSender;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.item.ItemGroup;
 import net.minecraft.item.ItemStack;
+import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.ServerPlayNetworkHandler;
 import net.minecraft.sound.SoundEvent;
-import net.minecraft.util.ActionResult;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.math.BlockPos;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import static com.unlikepaladin.pfm.PaladinFurnitureMod.MOD_ID;
+import java.io.IOException;
+import java.util.Collection;
 
 public class PaladinFurnitureModFabric extends PaladinFurnitureMod implements ModInitializer {
 
@@ -34,12 +36,19 @@ public class PaladinFurnitureModFabric extends PaladinFurnitureMod implements Mo
 
     public static final Logger GENERAL_LOGGER = LogManager.getLogger();
 
-    public static ConfigHolder<PaladinFurnitureModConfigImpl> pfmConfig;
+    public static PaladinFurnitureModConfig pfmConfig;
     @Override
     public void onInitialize() {
         // This code runs as soon as Minecraft is in a mod-load-ready state.
         // However, some things (like resources) may still be uninitialized.
         // Proceed with mild caution.
+        pfmConfig = new PaladinFurnitureModConfig(FabricLoader.getInstance().getConfigDir().resolve("pfm.properties"));
+        try {
+            pfmConfig.initialize();
+        } catch (IOException e) {
+            GENERAL_LOGGER.error("Failed to initialize Paladin's Furniture configuration, default values will be used instead");
+            GENERAL_LOGGER.error("", e);
+        }
 
         ServerLifecycleEvents.SERVER_STARTED.register((server) ->
         {
@@ -89,9 +98,7 @@ public class PaladinFurnitureModFabric extends PaladinFurnitureMod implements Mo
         if (FabricLoader.getInstance().isModLoaded("sandwichable") && FabricLoader.getInstance().isModLoaded("advanced_runtime_resource_pack")) {
             PFMSandwichableRegistry.register();
         }
-        if (FabricLoader.getInstance().isModLoaded("cloth-config2")) {
-            pfmConfig = AutoConfig.register(PaladinFurnitureModConfigImpl.class, Toml4jConfigSerializer::new);
-        }
+
         this.commonInit();
         StatisticsRegistryFabric.registerStatistics();
         SoundRegistryFabric.registerSounds();
@@ -99,6 +106,17 @@ public class PaladinFurnitureModFabric extends PaladinFurnitureMod implements Mo
         NetworkRegistryFabric.registerPackets();
         ScreenHandlerRegistryFabric.registerScreenHandlers();
         RecipeRegistryFabric.registerRecipes();
+        ParticleTypeRegistryFabric.registerParticleTypes();
+
+        ServerPlayConnectionEvents.JOIN.register(PaladinFurnitureModFabric::onServerJoin);
+    }
+
+
+    public static void onServerJoin(ServerPlayNetworkHandler handler, PacketSender sender, MinecraftServer server) {
+        PacketByteBuf buffer = new PacketByteBuf(Unpooled.buffer());
+        Collection<AbstractConfigOption> configOptions = PaladinFurnitureMod.getPFMConfig().options.values();
+        buffer.writeCollection(configOptions, AbstractConfigOption::writeConfigOption);
+        sender.sendPacket(NetworkIDs.CONFIG_SYNC_ID, buffer);
     }
 
 

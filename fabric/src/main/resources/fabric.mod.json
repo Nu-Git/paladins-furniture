@@ -11,7 +11,11 @@
     "homepage": "https://www.curseforge.com/minecraft/mc-mods/paladins-furniture",
     "sources": "https://github.com/UnlikePaladin/paladins-furniture"
   },
-
+  "contributors": [
+    "lzyzl6",
+    "MIHONO",
+    "WrenXing"
+  ],
   "license": "LGPL-3.0-only",
   "icon": "assets/pfm/icon.png",
   "environment": "*",
@@ -38,8 +42,7 @@
   ],
   "depends": {
     "fabric": "*",
-    "minecraft": ">=1.17.1",
-    "cloth-config2": ">=5.0.34"
+    "minecraft": ">=1.17.1"
   },
   "suggests": {
     "patchouli": "*"

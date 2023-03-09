@@ -249,6 +249,10 @@
     "pfm:iron_oven_range_hood",
     "pfm:raw_concrete",
     "pfm:iron_chain",
-    "pfm:trashcan"
+    "pfm:trashcan",
+    "pfm:mesh_trashcan",
+    "pfm:basic_sink",
+    "pfm:basic_shower_handle",
+    "pfm:basic_shower_head"
   ]
 }

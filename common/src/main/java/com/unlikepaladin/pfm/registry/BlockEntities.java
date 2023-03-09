@@ -1,8 +1,6 @@
 package com.unlikepaladin.pfm.registry;
 
 import com.unlikepaladin.pfm.blocks.blockentities.*;
-import com.unlikepaladin.pfm.blocks.blockentities.*;
-import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.BlockEntityType;
 
 public class BlockEntities {
@@ -20,5 +18,9 @@ public class BlockEntities {
     public static BlockEntityType<SinkBlockEntity> SINK_BLOCK_ENTITY;
     public static BlockEntityType<? extends TrashcanBlockEntity> TRASHCAN_BLOCK_ENTITY;
     public static BlockEntityType<GenericStorageBlockEntity3x3> KITCHEN_DRAWER_SMALL_BLOCK_ENTITY;
+    public static BlockEntityType<? extends ShowerHeadBlockEntity> SHOWER_HEAD_BLOCK_ENTITY;
+    public static BlockEntityType<ShowerHandleBlockEntity> SHOWER_HANDLE_BLOCK_ENTITY;
+    public static BlockEntityType<BathtubBlockEntity> BATHTUB_BLOCK_ENTITY;
+
 
 }

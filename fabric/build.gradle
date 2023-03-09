@@ -54,7 +54,12 @@ repositories {
         name = "Progwml6 maven"
         url = "https://dvs1.progwml6.com/files/maven/"
     }
-    mavenLocal()
+    maven {
+        url "https://cursemaven.com"
+        content {
+            includeGroup "curse.maven"
+        }
+    }
 }
 
 if (rootProject.sandwichable_compatibility == "true") {
@@ -68,19 +73,10 @@ else {
         modCompileOnly("maven.modrinth:sandwichable:${rootProject.sandwichable_version}")
         modCompileOnly("dev.lambdaurora:spruceui:${rootProject.spruceui_version}")
     }
-}
-
-if (rootProject.cloth_config_compatibility == "true") {
-    dependencies {
-        modApi("me.shedaniel.cloth:cloth-config-fabric:${rootProject.cloth_config_version}") {
-            exclude(group: "net.fabricmc.fabric-api")
-        }
-    }
-}
-else {
-    dependencies {
-        modCompileOnly("me.shedaniel.cloth:cloth-config-fabric:${rootProject.cloth_config_version}") {
-            exclude(group: "net.fabricmc.fabric-api")
+    maven {
+        url "https://cursemaven.com"
+        content {
+            includeGroup "curse.maven"
         }
     }
 }
@@ -110,12 +106,12 @@ else {
 
 if (rootProject.arrp_compatibility == "true") {
     dependencies {
-        modImplementation("net.devtech:arrp:${rootProject.arrp_version}")
+        modImplementation "curse.maven:arrp-463113:${rootProject.arrp_version}"
     }
 }
 else {
     dependencies {
-        modCompileOnly("net.devtech:arrp:${rootProject.arrp_version}")
+        modCompileOnly "curse.maven:arrp-463113:${rootProject.arrp_version}"
     }
 }
 dependencies {

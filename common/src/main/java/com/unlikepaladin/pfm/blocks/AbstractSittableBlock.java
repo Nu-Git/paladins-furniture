@@ -6,12 +6,15 @@ import com.unlikepaladin.pfm.registry.Entities;
 import com.unlikepaladin.pfm.registry.Statistics;
 import net.minecraft.block.*;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.ai.pathing.NavigationType;
+import net.minecraft.entity.passive.IronGolemEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.vehicle.AbstractMinecartEntity;
 import net.minecraft.fluid.FluidState;
 import net.minecraft.fluid.Fluids;
 import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.state.StateManager;
-import net.minecraft.state.property.BooleanProperty;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
@@ -23,10 +26,10 @@ import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldAccess;
 
+import java.util.ArrayList;
 import java.util.List;
 
-public abstract class AbstractSittableBlock extends HorizontalFacingBlock implements Waterloggable {
-    public static final BooleanProperty WATERLOGGED = Properties.WATERLOGGED;
+public abstract class AbstractSittableBlock extends HorizontalFacingBlock {
     private final BlockState baseBlockState;
     private final Block baseBlock;
 
@@ -34,42 +37,31 @@ public abstract class AbstractSittableBlock extends HorizontalFacingBlock implem
         super(settings);
         this.baseBlockState = this.getDefaultState();
         this.baseBlock = baseBlockState.getBlock();
-        if (!isNotWaterloggable(baseBlock)) {
-            setDefaultState(this.getStateManager().getDefaultState().with(Properties.HORIZONTAL_FACING, Direction.NORTH).with(WATERLOGGED, false));
-        }
+        setDefaultState(this.getStateManager().getDefaultState().with(Properties.HORIZONTAL_FACING, Direction.NORTH));
+
         this.height = 0.36f;
     }
 
     @Override
     protected void appendProperties(StateManager.Builder<Block, BlockState> stateManager) {
         stateManager.add(Properties.HORIZONTAL_FACING);
-        stateManager.add(WATERLOGGED);
     }
 
-    protected boolean isNotWaterloggable(Block block) {
-        return block instanceof BasicBathtub;
-    }
     @Override
     public BlockState getPlacementState(ItemPlacementContext ctx) {
         Direction facing = PaladinFurnitureMod.getPFMConfig().doChairsFacePlayer() ? ctx.getPlayerFacing() : ctx.getPlayerFacing().getOpposite();
-        if (isNotWaterloggable(baseBlock)) {
             return this.getDefaultState().with(Properties.HORIZONTAL_FACING, facing);
-        }
-        return this.getDefaultState().with(Properties.HORIZONTAL_FACING, facing).with(WATERLOGGED, ctx.getWorld().getFluidState(ctx.getBlockPos()).getFluid() == Fluids.WATER);
     }
 
     @Override
     public FluidState getFluidState(BlockState state) {
-        if (isNotWaterloggable(baseBlock)) {
-            return super.getFluidState(state);
-        }
-        return state.get(WATERLOGGED) ? Fluids.WATER.getStill(false) : super.getFluidState(state);
+        return super.getFluidState(state);
     }
 
     @Override
     public BlockState getStateForNeighborUpdate(BlockState state, Direction direction, BlockState neighborState, WorldAccess world, BlockPos pos, BlockPos neighborPos) {
-        if (!isNotWaterloggable(baseBlock)) {
-            if (state.get(WATERLOGGED))
+        if (state.contains(Properties.WATERLOGGED)) {
+            if (state.get(Properties.WATERLOGGED))
                 world.getFluidTickScheduler().schedule(pos, Fluids.WATER, Fluids.WATER.getTickRate(world));
         }
         return super.getStateForNeighborUpdate(state, direction, neighborState, world, pos, neighborPos);
@@ -78,75 +70,104 @@ public abstract class AbstractSittableBlock extends HorizontalFacingBlock implem
     public float height;
     @Override
     public ActionResult onUse(BlockState state, World world, BlockPos pos, PlayerEntity player, Hand hand, BlockHitResult hit) {
-        if (!world.isClient) {
-            if (player.isSpectator() || player.isSneaking()) {
-                return ActionResult.PASS;
-            }
-            double px;
-            double pz;
-            if (state.getBlock() instanceof BasicChair) {
-                Direction direction = state.get(FACING);
-                if (state.get(BasicChair.TUCKED)) {
-                    switch (direction) {
-                        case EAST -> {
-                            px = pos.getX() + 0.1;
-                            pz = pos.getZ() + 0.5;
-                        }
-                        case WEST -> {
-                            px = pos.getX() + 0.9;
-                            pz = pos.getZ() + 0.5;
-                        }
-                        case SOUTH -> {
-                            px = pos.getX() + 0.5;
-                            pz = pos.getZ() + 0.1;
-                        }
-                        default -> {
-                            px = pos.getX() + 0.5;
-                            pz = pos.getZ() + 0.9;
-                        }
+        if (world.isClient) {
+            return ActionResult.CONSUME;
+        }
+
+        if (player.isSpectator() || player.isSneaking()) {
+            return ActionResult.FAIL;
+        }
+
+        List<ChairEntity> active = world.getEntitiesByClass(ChairEntity.class, new Box(pos), Entity::hasPassengers);
+        List<Entity> hasPassenger = new ArrayList<>();
+        active.forEach(chairEntity -> hasPassenger.add(chairEntity.getFirstPassenger()));
+        if (!active.isEmpty() && hasPassenger.stream().anyMatch(Entity::isPlayer)) {
+            return ActionResult.FAIL;
+        }
+        else if (!active.isEmpty()) {
+            hasPassenger.forEach(Entity::stopRiding);
+            return ActionResult.SUCCESS;
+        }
+        else if (sitEntity(world, pos, state, player) == ActionResult.SUCCESS) {
+            if (!(state.getBlock() instanceof BasicToiletBlock))
+                player.incrementStat(Statistics.CHAIR_USED);
+            return ActionResult.SUCCESS;
+        }
+        return ActionResult.CONSUME;
+    }
+
+
+    public ActionResult sitEntity(World world, BlockPos pos, BlockState state, Entity entityToSit) {
+        double px;
+        double pz;
+        if (state.getBlock() instanceof BasicChairBlock) {
+            Direction direction = state.get(FACING);
+            if (state.get(BasicChairBlock.TUCKED)) {
+                switch (direction) {
+                    case EAST -> {
+                        px = pos.getX() + 0.1;
+                        pz = pos.getZ() + 0.5;
                     }
-                }
-                else {
-                    px =  pos.getX() + 0.5;
-                    pz = pos.getZ() + 0.5;
+                    case WEST -> {
+                        px = pos.getX() + 0.9;
+                        pz = pos.getZ() + 0.5;
+                    }
+                    case SOUTH -> {
+                        px = pos.getX() + 0.5;
+                        pz = pos.getZ() + 0.1;
+                    }
+                    default -> {
+                        px = pos.getX() + 0.5;
+                        pz = pos.getZ() + 0.9;
+                    }
                 }
             }
             else {
                 px =  pos.getX() + 0.5;
                 pz = pos.getZ() + 0.5;
             }
-            double py = pos.getY() + this.height;
-
-            List<ChairEntity> active = world.getEntitiesByClass(ChairEntity.class, new Box(pos), Entity::hasPlayerRider);
-            if (!active.isEmpty())
-                return ActionResult.PASS;
-
-            float yaw = state.get(FACING).getOpposite().asRotation();
-            ChairEntity entity = Entities.CHAIR.create(world);
-            entity.refreshPositionAndAngles(px, py, pz, yaw, 0);
-            entity.setNoGravity(true);
-            entity.setSilent(true);
-            entity.setInvisible(false);
-            entity.setInvulnerable(true);
-            entity.setAiDisabled(true);
-            entity.setNoDrag(true);
-            entity.setHeadYaw(yaw);
-            entity.setYaw(yaw);
-            entity.setBodyYaw(yaw);
-            if (world.spawnEntity(entity)) {
-                player.startRiding(entity, true);
-                player.setYaw(yaw);
-                player.setHeadYaw(yaw);
-                entity.setYaw(yaw);
-                entity.setBodyYaw(yaw);
-                entity.setHeadYaw(yaw);
-                if (!(state.getBlock() instanceof BasicToilet))
-                    player.incrementStat(Statistics.CHAIR_USED);
-                return ActionResult.SUCCESS;
-            }
-            return ActionResult.CONSUME;
         }
-        return ActionResult.PASS;
+        else {
+            px =  pos.getX() + 0.5;
+            pz = pos.getZ() + 0.5;
+        }
+        double py = pos.getY() + this.height;
+        float yaw = state.get(FACING).getOpposite().asRotation();
+        ChairEntity chairEntity = Entities.CHAIR.create(world);
+        chairEntity.refreshPositionAndAngles(px, py, pz, yaw, 0);
+        chairEntity.setNoGravity(true);
+        chairEntity.setSilent(true);
+        chairEntity.setInvisible(false);
+        chairEntity.setInvulnerable(true);
+        chairEntity.setAiDisabled(true);
+        chairEntity.setNoDrag(true);
+        chairEntity.setHeadYaw(yaw);
+        chairEntity.setYaw(yaw);
+        chairEntity.setBodyYaw(yaw);
+        if (world.spawnEntity(chairEntity)) {
+            entityToSit.startRiding(chairEntity, true);
+            entityToSit.setYaw(yaw);
+            entityToSit.setHeadYaw(yaw);
+            chairEntity.setYaw(yaw);
+            chairEntity.setBodyYaw(yaw);
+            chairEntity.setHeadYaw(yaw);
+
+            return ActionResult.SUCCESS;
+        }
+        return ActionResult.CONSUME;
+    }
+
+    @Override
+    public void onEntityCollision(BlockState state, World world, BlockPos pos, Entity entity) {
+        super.onEntityCollision(state, world, pos, entity);
+        List<ChairEntity> active = world.getEntitiesByClass(ChairEntity.class, new Box(pos), Entity::hasPassengers);
+        if (!active.isEmpty())
+            return;
+
+        if (entity instanceof PlayerEntity || entity instanceof IronGolemEntity || entity instanceof AbstractMinecartEntity || entity.hasVehicle() || !(entity instanceof LivingEntity)) {
+            return;
+        }
+        sitEntity(world, pos, state, entity);
     }
 
     public int getFlammability(BlockState state, BlockView world, BlockPos pos, Direction face) {
@@ -156,6 +177,9 @@ public abstract class AbstractSittableBlock extends HorizontalFacingBlock implem
         return 0;
     }
 
-
+    @Override
+    public boolean canPathfindThrough(BlockState state, BlockView world, BlockPos pos, NavigationType type) {
+        return false;
+    }
 }
 
